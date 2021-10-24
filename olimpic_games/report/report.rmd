@@ -1,0 +1,271 @@
+---
+title: "Project #1"
+author: "Dmitrii Podgalo"
+date: "24/10/2021"
+output:
+  html_document: 
+    toc: yes
+    toc_float: yes
+---
+
+```{r setup, include=FALSE}
+library(dplyr)
+library(ggplot2)
+library(kableExtra)
+options(scipen = 0, digits = 3)
+knitr::opts_chunk$set(message = F, warning = F, highlight = TRUE)
+```
+
+## Load Data
+```{r}
+read_data <- function(path = "../data/", pattern = '*.csv', ...) {
+  do.call(rbind, lapply(list.files(path = path, pattern = pattern), function(file) read.csv(file)))
+}
+td <- read_data()
+```
+
+
+## EDA
+Transform vars to factor:
+```{r}
+td$Sex <- factor(td$Sex)
+td$Sport <- factor(td$Sport)
+```
+
+Check our data:
+```{r, eval=FALSE}
+str(td)
+head(td)
+summary(td)
+```
+
+Remove duplicates:
+```{r}
+td <- unique(td)
+```
+
+Remove extremely data:
+1. The oldest athlete was 72.
+2. The tallest athlete was 218 cm.
+3. The easiest athlete can't be 7 kg.
+```{r}
+td <- td[td$Age <= 72,] 
+td <- td[-which.max(td$Height),] 
+td <- td[-which.min(td$Weight),]
+```
+
+Remove rows that fully have NA:
+```{r}
+td <- td[!(grepl('NA', rownames(td))),]
+```
+
+## Tasks
+### # 3
+```{r}
+td %>% 
+  filter(Year == 1992) %>% 
+  group_by(Sex) %>% 
+  summarise(min(Age))
+```
+
+### # 4
+```{r}
+td %>% 
+  group_by(Sex) %>% 
+  select(Height) %>% 
+  summarise(across(.f = list(mean = mean, sd = sd), na.rm = T))
+```
+
+### # 5
+```{r}
+td %>% 
+  filter(Sex == 'F', Sport == 'Tennis', Year == 2000) %>% 
+  select(Height) %>% 
+  summarise(across(.f = list(mean = mean, sd = sd), na.rm = T)) %>% 
+  mutate(across(everything(), round, 1))
+```
+
+### # 6
+```{r}
+td %>% 
+  filter(Year == 2006) %>% 
+  arrange(desc(Weight)) %>% 
+  slice(1) %>% 
+  select(Sport)
+```
+
+### # 7
+```{r}
+td %>% 
+  filter(Year == 1980:2010, Sex == 'F', Medal == 'Gold') %>% 
+  summarise(Golds = n())
+```
+
+### # 8
+```{r}
+td %>% 
+  filter(Name == 'John Aalberg') %>% 
+  summarise(Count = n())
+```
+
+### # 9
+```{r}
+sort(table(cut(td$Age, seq(15, 55, by=10), right=F, include.lowest=T)), d=T)
+```
+
+### # 10
+```{r}
+length(unique(td[td$Year == 2002,]$Sport)) - length(unique(td[td$Year == 1994,]$Sport))
+```
+
+### # 11
+```{r}
+td %>% 
+  filter(Medal == c('Gold', 'Silver', 'Bronze')) %>% 
+  group_by(Medal, Season, Team) %>% 
+  summarise(Count = n()) %>% 
+  arrange(-Count) %>%  
+  slice_max(3)
+```
+
+### # 12
+```{r, eval=FALSE}
+z_normalize <- function(x) {
+  (x - mean(x, na.rm = TRUE)) / sd(x, na.rm = TRUE)
+}
+
+td %>% 
+  mutate(Height_z_scores = z_normalize(Height))
+```
+
+### # 13
+```{r, eval=FALSE}
+min_max_normalize <- function(x) {
+  (x - min(x, na.rm = TRUE)) / (max(x, na.rm = TRUE) - min(x, na.rm = TRUE))
+}
+
+td %>% 
+  mutate(Height_min_max_scaled = min_max_normalize(Height))
+```
+
+### # 14
+```{r, echo=FALSE, results='hold'}
+td %>% 
+  group_by(Sex) %>% 
+  filter(Sex == c('M', 'F')) %>% 
+  select(Height) %>% 
+  summarise(across(.f = list(min, max, mean, median, sd), na.rm=T)) %>% 
+  rename(sex = Sex, min = Height_1, max = Height_2, mean = Height_3, median = Height_4, sd = Height_5) %>%
+  kbl(caption = 'Height comparison') %>%
+  kable_classic(full_width = F, html_font = "Cambria")
+```
+
+```{r, echo=FALSE}
+td %>% 
+  group_by(Sex) %>% 
+  filter(Sex == c('M', 'F')) %>% 
+  select(Weight) %>% 
+  summarise(across(.f = list(min, max, mean, median, sd), na.rm=T)) %>% 
+  rename(sex = Sex, min = Weight_1, max = Weight_2, mean = Weight_3, median = Weight_4, sd = Weight_5) %>%
+  kbl(caption = 'Weight comparison') %>%
+  kable_classic(full_width = F, html_font = "Cambria")
+```
+
+```{r, echo=FALSE}
+td %>% 
+  group_by(Sex) %>% 
+  filter(Sex == c('M', 'F')) %>% 
+  select(Age) %>% 
+  summarise(across(.f = list(min, max, mean, median, sd), na.rm=T)) %>% 
+  rename(sex = Sex, min = Age_1, max = Age_2, mean = Age_3, median = Age_4, sd = Age_5) %>%
+  kbl(caption = 'Age comparison') %>%
+  kable_classic(full_width = F, html_font = "Cambria")
+```
+
+### # 15
+Look at **Task 11**. We can see that the first countries are "Western countries" and the most medals belong to USA. Here we can formulate 3 interrelated hypotheses:  
+
+1. It can mean that Olympic Games are from the West and the Western countries has an advantage in own sports. 
+
+2. It can mean that the economic indicators of the country are also expressed in sports. More economically developed country has more achievements in sports.
+
+3. Below we can see that US had more "NA" medals, it means that sportsmen count correlated with medals count and US just had more sportsmen.
+
+```{r}
+td %>% 
+  group_by(Medal, Season, Team) %>% 
+  summarise(Count = n()) %>% 
+  arrange(-Count) %>%  
+  slice_max(3)
+```
+
+### # 16
+#### First hypothesis
+
+Conditions for the use of the chi-square:
+
+1. Normal distribution of variables.
+
+2. All observations are independent.
+
+H0: Young sportsmen (up to and including 25 years) hasn't an advantage over the old ones.
+H1: Young sportsmen (up to and including 25 years) has an advantage over the old ones.
+
+```{r}
+young_gold <- td %>% 
+  filter(Age <= 25, Medal == 'Gold') %>% 
+  summarise(n())
+
+young_all <- td %>% 
+  filter(Age <= 25) %>% 
+  summarise(n())
+
+old_gold <- td %>% 
+  filter(Age > 25, Medal == 'Gold') %>% 
+  summarise(n())
+
+old_all <- td %>% 
+  filter(Age > 25) %>% 
+  summarise(n())
+
+young <- young_gold[1,] / young_all[1,]
+old <- old_gold[1,] / old_all[1,]
+
+sum_table = data.frame(young = young, old = old)
+
+chisq.test(sum_table)
+```
+
+We can see that *X-squared is less than 0.004*, *p-value is `r chisq.test(sum_table)$p.value`* and *df `r chisq.test(sum_table)$parameter`*. It means that no significant difference was found and H0 is true.
+
+#### Second hypothesis
+H0: Every the summer games US gets more gold medals.
+H1: Every the summer games US don't gets more gold medals.
+
+Conditions for the use of the correlation coefficient: 
+
+1. Normal distribution of variables.
+
+2. The relationship is linear and monotonic.
+
+
+
+```{r}
+lm_table_US <- td %>% 
+  filter(Team == 'United States', Medal == 'Gold', Season == 'Summer') %>% 
+  group_by(Year) %>% 
+  summarise(Count = n())
+cor.test(y = lm_table_US$Count, x = lm_table_US$Year)
+```
+
+*t-value is `r cor.test(y = lm_table_US$Count, x = lm_table_US$Year)$statistic`*, *p-value is less than 0.05*, *df is `r cor.test(y = lm_table_US$Count, x = lm_table_US$Year)$parameter`* and *correlation coefficient is `r cor.test(y = lm_table_US$Count, x = lm_table_US$Year)$estimate`*, so we can expected that every the summer games US achieves more gold medals. Let's draw it.
+
+```{r, echo=FALSE}
+ggplot(lm_table_US, aes(Year, Count)) +
+  geom_line() +
+  geom_smooth(method = 'lm', se = F) +
+  scale_x_continuous(breaks = seq(min(lm_table_US$Year),
+                                  max(lm_table_US$Year),
+                                  by = 8))
+```
+

@@ -149,37 +149,29 @@ td %>%
 ```
 
 ### # 14
+```{r}
+stat_tables <- function(varr) {
+v <- td %>% 
+  distinct_at(vars(Name), .keep_all = T) %>% 
+  filter(Sex == c('M', 'F')) %>% 
+  t.test(.[,varr] ~ .[, 'Sex'], data = ., na.action = na.omit)
+
+data.frame(t.value = v$statistic, df = v$parameter, p.value = v$p.value, 'F mean' = v$estimate[1], 'M mean' = v$estimate[2], row.names = c()) %>%
+  kbl(caption = paste(varr, 'comparison')) %>%
+  kable_classic(full_width = F, html_font = "Cambria")
+}
+```
+
 ```{r, echo=FALSE, results='hold'}
-td %>% 
-  group_by(Sex) %>% 
-  filter(Sex == c('M', 'F')) %>% 
-  select(Height) %>% 
-  summarise(across(.f = list(min, max, mean, median, sd), na.rm=T)) %>% 
-  rename(sex = Sex, min = Height_1, max = Height_2, mean = Height_3, median = Height_4, sd = Height_5) %>%
-  kbl(caption = 'Height comparison') %>%
-  kable_classic(full_width = F, html_font = "Cambria")
+stat_tables('Height')
 ```
 
-```{r, echo=FALSE}
-td %>% 
-  group_by(Sex) %>% 
-  filter(Sex == c('M', 'F')) %>% 
-  select(Weight) %>% 
-  summarise(across(.f = list(min, max, mean, median, sd), na.rm=T)) %>% 
-  rename(sex = Sex, min = Weight_1, max = Weight_2, mean = Weight_3, median = Weight_4, sd = Weight_5) %>%
-  kbl(caption = 'Weight comparison') %>%
-  kable_classic(full_width = F, html_font = "Cambria")
+```{r, echo=FALSE, results='hold'}
+stat_tables('Weight')
 ```
 
-```{r, echo=FALSE}
-td %>% 
-  group_by(Sex) %>% 
-  filter(Sex == c('M', 'F')) %>% 
-  select(Age) %>% 
-  summarise(across(.f = list(min, max, mean, median, sd), na.rm=T)) %>% 
-  rename(sex = Sex, min = Age_1, max = Age_2, mean = Age_3, median = Age_4, sd = Age_5) %>%
-  kbl(caption = 'Age comparison') %>%
-  kable_classic(full_width = F, html_font = "Cambria")
+```{r, echo=FALSE, results='hold'}
+stat_tables('Age')
 ```
 
 ### # 15
@@ -189,14 +181,15 @@ Look at **Task 11**. We can see that the first countries are "Western countries"
 
 2. It can mean that the economic indicators of the country are also expressed in sports. More economically developed country has more achievements in sports.
 
-3. Below we can see that US had more "NA" medals, it means that sportsmen count correlated with medals count and US just had more sportsmen.
+3. Below we can see that US has more "NA" medals, it means that sportsmen count can correlate with medals count and US just has more sportsmen.
 
 ```{r}
 td %>% 
   group_by(Medal, Season, Team) %>% 
   summarise(Count = n()) %>% 
   arrange(-Count) %>%  
-  slice_max(3)
+  slice_max(3) %>% 
+  filter(is.na(Medal)) 
 ```
 
 ### # 16

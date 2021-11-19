@@ -252,7 +252,7 @@ div.tocify {
 <div id="load-data" class="section level2">
 <h2>Load Data</h2>
 <pre class="r"><code>read_data &lt;- function(path = &quot;../data/&quot;, pattern = &#39;*.csv&#39;, ...) {
-  do.call(rbind, lapply(list.files(path = path, pattern = pattern), function(file) read.csv(file)))
+  do.call(rbind, lapply(list.files(path, pattern), function(file) read.csv(paste0(path, file))))
 }
 td &lt;- read_data()</code></pre>
 </div>

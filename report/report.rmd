@@ -1,0 +1,96 @@
+---
+title: "Lecture practice #3"
+author: 'Dmitrii Podgalo <br /> Aleksandra Gorbonos'
+date: "19/11/2021"
+output:
+  html_document: 
+    toc: yes
+    toc_float: yes
+---
+
+```{r setup, include=FALSE}
+library(dplyr)
+library(tidyr)
+library(ggplot2)
+library(kableExtra)
+options(scipen = 0, digits = 3)
+knitr::opts_chunk$set(message = F, warning = F, highlight = TRUE)
+```
+
+## Load Data
+```{r}
+read_data <- function(path = '../data/', pattern = '*.csv', ...) {
+  do.call(rbind, lapply(list.files(path, pattern), function(file) read.csv(paste0(path, file))))
+}
+td <- read_data()
+```
+
+
+## EDA
+Find incorrect values:
+```{r, eval=FALSE}
+str(td)
+unique(td$gender)
+unique(td$age)
+```
+
+Transform incorrect data and make columns to a necessary type:
+```{r}
+td <- td %>% 
+  select(-X) %>% 
+  filter(age != '350', age != '220',
+         !is.na(is_relapse)) %>%
+  mutate(gender = factor(replace(gender, gender == 'malle', 'male')),
+         age = as.integer(replace(age, age == 'thirty-one', '31')),
+         drug_type = factor(drug_type),
+         is_relapse = factor(is_relapse, labels = c(FALSE, TRUE)))
+```
+
+## Tasks
+### # 3
+```{r}
+td %>% 
+  select(days_in_hospital) %>% 
+  summarise(across(.fns = list(mean, sd))) %>% 
+  kbl(caption = 'Days in hospital', col.names = c('mean', 'sd')) %>%
+  kable_classic(full_width = F, html_font = "Cambria")
+```
+
+### # 4
+```{r}
+se <- td %>% 
+  group_by(gender) %>% 
+  summarise(mean = mean(days_in_hospital),
+            y_max = mean + 1.96 * sd(days_in_hospital)/sqrt(length(days_in_hospital)),
+            y_min = mean - 1.96 * sd(days_in_hospital)/sqrt(length(days_in_hospital)))
+
+ggplot(se, aes(gender, mean)) +
+  geom_errorbar(aes(ymin=y_min, ymax=y_max), width = 0.2) +
+  geom_point(shape = 21, size = 3, fill = "white") +
+  xlab('Gender') +
+  ylab('Days') +
+  ggtitle('Days in hospital')
+```
+
+### # 5
+```{r}
+td %>% 
+  filter(gender == 'female', drug_type %in% c('Placebo', 'New_type_2')) %>% 
+  select(drug_type, days_in_hospital) %>% 
+  group_by(drug_type) %>% 
+  summarise(days_in_hospital = list(days_in_hospital)) %>% 
+  spread(drug_type, days_in_hospital) %>% 
+  mutate(df = t.test(unlist(Placebo), unlist(New_type_2))$parameter,
+         t_value = t.test(unlist(Placebo), unlist(New_type_2))$statistic,
+         p_value = t.test(unlist(Placebo), unlist(New_type_2))$p.value) %>% 
+  select(-c(New_type_2, Placebo)) %>% 
+  kbl(caption = 'Days in hospital for women grouped by placebo and type 2 drugs', col.names = c('df', 't value', 'p value')) %>%
+  kable_classic(full_width = F, html_font = "Cambria")
+```
+**The number of days spent in the hospital for women who took a placebo or a second type of medication has a statistically significant difference.**
+
+### # 6
+```{r}
+aov_test <- summary(aov(days_in_hospital ~ drug_type, td))
+```
+**The number of days spent in the hospital significantly depends on drug type (F = `r aov_test[[1]]$'F value'[1]`, p value = `r aov_test[[1]]$'Pr(>F)'[1]`, df 1 = `r aov_test[[1]]$Df[1]`, df 2 = `r aov_test[[1]]$Df[2]`).**

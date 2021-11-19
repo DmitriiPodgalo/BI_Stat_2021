@@ -20,7 +20,7 @@ knitr::opts_chunk$set(message = F, warning = F, highlight = TRUE)
 ## Load Data
 ```{r}
 read_data <- function(path = '../data/', pattern = '*.csv', ...) {
-  do.call(rbind, lapply(list.files(path = path, pattern = pattern), function(file) read.csv(file)))
+  do.call(rbind, lapply(list.files(path, pattern), function(file) read.csv(paste0(path, file))))
 }
 td <- read_data()
 ```

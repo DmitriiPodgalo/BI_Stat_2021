@@ -1,0 +1,95 @@
+---
+title: "PCA tasks"
+author: 'Dmitrii Podgalo'
+date: "26/11/2021"
+output:
+  html_document: 
+    toc: yes
+    toc_float: yes
+---
+
+```{r setup, include=FALSE}
+library(vegan)
+library(kernlab)
+options(scipen = 0, digits = 3)
+knitr::opts_chunk$set(message = F, warning = F, highlight = TRUE)
+```
+
+## Load Data
+```{r}
+read_data <- function(path = '../data/', pattern = '*.csv', ...) {
+  do.call(cbind, lapply(list.files(path, pattern), function(file) read.csv(paste0(path, file))))
+}
+superconduct <- read_data()
+superconduct <- superconduct[-c(ncol(superconduct) - 1, ncol(superconduct))]
+```
+
+
+## Train and test split
+```{r}
+set.seed(32)
+train_size <- floor(.66 * nrow(superconduct))
+train_ind <- sample(seq_len(nrow(superconduct)), size = train_size)
+
+train <- superconduct[train_ind,]
+test <- superconduct[-train_ind,]
+
+X_train <- train[-82]
+y_train <- train[82]
+X_test <- test[-82]
+y_test <- test[82]
+```
+
+## Standartization
+```{r}
+mean_train <- sapply(X_train, mean)
+sd_train <- sapply(X_train, sd)
+mean_sd_std <- function(x, mean, sd) if (sd != 0) (x - mean) / sd else 0
+z_std <- function(x) if (mean(x) == 0) 0 else scale(x)
+
+X_test <- as.data.frame(sapply(colnames(X_test), function(name) mean_sd_std(X_test[name], mean_train[name], sd_train[name])))
+
+X_train <- as.data.frame(apply(X_train, 2, z_std))
+X_test <- as.data.frame(apply(X_test, 2, z_std))
+```
+
+## Linear model analyse
+```{r, eval=FALSE}
+lm(critical_temp ~ ., train)
+```
+R-squared is `r summary(lm(critical_temp ~ ., train))$r.squared`, df is `r summary(lm(critical_temp ~ ., train))$df[2]` with `r summary(lm(critical_temp ~ ., train))$df[1]` predictors. Base only on this parameters we can say that this is a bad linear model, because using so many df and predictors we expected better result (R-squared equal 1).
+
+## PC analyse
+```{r}
+train_pca <- rda(X_train)
+screeplot(train_pca, type = "lines", bstick = TRUE)
+```
+Optimal PC is 5.
+
+```{r, cache=TRUE}
+coefs <- as.data.frame(summary(train_pca)$species)[1:5]
+mult_coefs <- function(row, coef) sum(row * coef)
+X_test_PC <- as.data.frame(sapply(colnames(coefs), function(name) apply(X_test, 1, function(row) mult_coefs(row, coefs[name]))))
+X_test_PC$critical_temp <- y_test[,1]
+```
+
+Let's calculate R-squared:
+```{r}
+summary(lm(critical_temp ~ ., X_test_PC))
+```
+R-squared is `r summary(lm(critical_temp ~ ., X_test_PC))$r.squared`, df is `r summary(lm(critical_temp ~ ., X_test_PC))$df[2]` with `r summary(lm(critical_temp ~ ., X_test_PC))$df[1]` predictors.
+
+## Kernel PC analyse
+```{r, cache=TRUE}
+train_kpca <- kpca(X_train)
+
+coefs_kpca <- as.data.frame(pcv(train_kpca))[1:5]
+X_test_kpca <- as.data.frame(sapply(colnames(coefs_kpca), function(name) apply(X_test, 1, function(row) mult_coefs(row, coefs_kpca[name]))))
+X_test_kpca$critical_temp <- y_test[,1]
+
+summary(lm(critical_temp ~ ., X_test_kpca))
+```
+R-squared is `r summary(lm(critical_temp ~ ., X_test_kpca))$r.squared`, df is `r summary(lm(critical_temp ~ ., X_test_kpca))$df[2]` with `r summary(lm(critical_temp ~ ., X_test_kpca))$df[1] - 1` predictors. Also, PC1 and PC3 has not statistical confirmation.
+
+
+

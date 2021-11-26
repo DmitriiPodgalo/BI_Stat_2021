@@ -1,1 +1,1 @@
-**Statistics and R lecture practice #3 in Bioinformatics Institute**
+**Statistics and R pca tasks in Bioinformatics Institute**

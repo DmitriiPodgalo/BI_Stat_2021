@@ -1,7 +1,7 @@
 ---
-title: "Lecture practice #3"
-author: 'Dmitrii Podgalo <br /> Aleksandra Gorbonos'
-date: "19/11/2021"
+title: "PCA tasks"
+author: 'Dmitrii Podgalo'
+date: "26/11/2021"
 output:
   html_document: 
     toc: yes
@@ -9,10 +9,8 @@ output:
 ---
 
 ```{r setup, include=FALSE}
-library(dplyr)
-library(tidyr)
-library(ggplot2)
-library(kableExtra)
+library(vegan)
+library(kernlab)
 options(scipen = 0, digits = 3)
 knitr::opts_chunk$set(message = F, warning = F, highlight = TRUE)
 ```
@@ -20,77 +18,78 @@ knitr::opts_chunk$set(message = F, warning = F, highlight = TRUE)
 ## Load Data
 ```{r}
 read_data <- function(path = '../data/', pattern = '*.csv', ...) {
-  do.call(rbind, lapply(list.files(path, pattern), function(file) read.csv(paste0(path, file))))
+  do.call(cbind, lapply(list.files(path, pattern), function(file) read.csv(paste0(path, file))))
 }
-td <- read_data()
+superconduct <- read_data()
+superconduct <- superconduct[-c(ncol(superconduct) - 1, ncol(superconduct))]
 ```
 
 
-## EDA
-Find incorrect values:
+## Train and test split
+```{r}
+set.seed(32)
+train_size <- floor(.66 * nrow(superconduct))
+train_ind <- sample(seq_len(nrow(superconduct)), size = train_size)
+
+train <- superconduct[train_ind,]
+test <- superconduct[-train_ind,]
+
+X_train <- train[-82]
+y_train <- train[82]
+X_test <- test[-82]
+y_test <- test[82]
+```
+
+## Standartization
+```{r}
+mean_train <- sapply(X_train, mean)
+sd_train <- sapply(X_train, sd)
+mean_sd_std <- function(x, mean, sd) if (sd != 0) (x - mean) / sd else 0
+z_std <- function(x) if (mean(x) == 0) 0 else scale(x)
+
+X_test <- as.data.frame(sapply(colnames(X_test), function(name) mean_sd_std(X_test[name], mean_train[name], sd_train[name])))
+
+X_train <- as.data.frame(apply(X_train, 2, z_std))
+X_test <- as.data.frame(apply(X_test, 2, z_std))
+```
+
+## Linear model analyse
 ```{r, eval=FALSE}
-str(td)
-unique(td$gender)
-unique(td$age)
+lm(critical_temp ~ ., train)
 ```
+R-squared is `r summary(lm(critical_temp ~ ., train))$r.squared`, df is `r summary(lm(critical_temp ~ ., train))$df[2]` with `r summary(lm(critical_temp ~ ., train))$df[1]` predictors. Base only on this parameters we can say that this is a bad linear model, because using so many df and predictors we expected better result (R-squared equal 1).
 
-Transform incorrect data and make columns to a necessary type:
+## PC analyse
 ```{r}
-td <- td %>% 
-  select(-X) %>% 
-  filter(age != '350', age != '220',
-         !is.na(is_relapse)) %>%
-  mutate(gender = factor(replace(gender, gender == 'malle', 'male')),
-         age = as.integer(replace(age, age == 'thirty-one', '31')),
-         drug_type = factor(drug_type),
-         is_relapse = factor(is_relapse, labels = c(FALSE, TRUE)))
+train_pca <- rda(X_train)
+screeplot(train_pca, type = "lines", bstick = TRUE)
+```
+Optimal PC is 5.
+
+```{r, cache=TRUE}
+coefs <- as.data.frame(summary(train_pca)$species)[1:5]
+mult_coefs <- function(row, coef) sum(row * coef)
+X_test_PC <- as.data.frame(sapply(colnames(coefs), function(name) apply(X_test, 1, function(row) mult_coefs(row, coefs[name]))))
+X_test_PC$critical_temp <- y_test[,1]
 ```
 
-## Tasks
-### # 3
+Let's calculate R-squared:
 ```{r}
-td %>% 
-  select(days_in_hospital) %>% 
-  summarise(across(.fns = list(mean, sd))) %>% 
-  kbl(caption = 'Days in hospital', col.names = c('mean', 'sd')) %>%
-  kable_classic(full_width = F, html_font = "Cambria")
+summary(lm(critical_temp ~ ., X_test_PC))
 ```
+R-squared is `r summary(lm(critical_temp ~ ., X_test_PC))$r.squared`, df is `r summary(lm(critical_temp ~ ., X_test_PC))$df[2]` with `r summary(lm(critical_temp ~ ., X_test_PC))$df[1]` predictors.
 
-### # 4
-```{r}
-se <- td %>% 
-  group_by(gender) %>% 
-  summarise(mean = mean(days_in_hospital),
-            y_max = mean + 1.96 * sd(days_in_hospital)/sqrt(length(days_in_hospital)),
-            y_min = mean - 1.96 * sd(days_in_hospital)/sqrt(length(days_in_hospital)))
+## Kernel PC analyse
+```{r, cache=TRUE}
+train_kpca <- kpca(X_train)
 
-ggplot(se, aes(gender, mean)) +
-  geom_errorbar(aes(ymin=y_min, ymax=y_max), width = 0.2) +
-  geom_point(shape = 21, size = 3, fill = "white") +
-  xlab('Gender') +
-  ylab('Days') +
-  ggtitle('Days in hospital')
+coefs_kpca <- as.data.frame(pcv(train_kpca))[1:5]
+X_test_kpca <- as.data.frame(sapply(colnames(coefs_kpca), function(name) apply(X_test, 1, function(row) mult_coefs(row, coefs_kpca[name]))))
+X_test_kpca$critical_temp <- y_test[,1]
+
+summary(lm(critical_temp ~ ., X_test_kpca))
 ```
+R-squared is `r summary(lm(critical_temp ~ ., X_test_kpca))$r.squared`, df is `r summary(lm(critical_temp ~ ., X_test_kpca))$df[2]` with `r summary(lm(critical_temp ~ ., X_test_kpca))$df[1] - 1` predictors. Also, PC1 and PC3 has not statistical confirmation.
 
-### # 5
-```{r}
-td %>% 
-  filter(gender == 'female', drug_type %in% c('Placebo', 'New_type_2')) %>% 
-  select(drug_type, days_in_hospital) %>% 
-  group_by(drug_type) %>% 
-  summarise(days_in_hospital = list(days_in_hospital)) %>% 
-  spread(drug_type, days_in_hospital) %>% 
-  mutate(df = t.test(unlist(Placebo), unlist(New_type_2))$parameter,
-         t_value = t.test(unlist(Placebo), unlist(New_type_2))$statistic,
-         p_value = t.test(unlist(Placebo), unlist(New_type_2))$p.value) %>% 
-  select(-c(New_type_2, Placebo)) %>% 
-  kbl(caption = 'Days in hospital for women grouped by placebo and type 2 drugs', col.names = c('df', 't value', 'p value')) %>%
-  kable_classic(full_width = F, html_font = "Cambria")
-```
-**The number of days spent in the hospital for women who took a placebo or a second type of medication has a statistically significant difference.**
 
-### # 6
-```{r}
-aov_test <- summary(aov(days_in_hospital ~ drug_type, td))
-```
-**The number of days spent in the hospital significantly depends on drug type (F = `r aov_test[[1]]$'F value'[1]`, p value = `r aov_test[[1]]$'Pr(>F)'[1]`, df 1 = `r aov_test[[1]]$Df[1]`, df 2 = `r aov_test[[1]]$Df[2]`).**
+
